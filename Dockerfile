@@ -1,20 +1,18 @@
-# Usa imagen base ligera de Python
+# Dockerfile
 FROM python:3.11-slim
 
-# Carpeta de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copiar requirements primero para aprovechar cache
 COPY requirements.txt .
-
-# Instalar dependencias
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar todo el código y archivos necesarios
+# Copiamos el código de la app y los scripts de datos/modelo
 COPY . .
 
-# Exponer puerto
-EXPOSE 8080
+# Durante el build: descarga datos, prepara features y entrena el modelo
+RUN python deacero.py && \
+    python prepare_data.py && \
+    python train_baseline.py
 
-# Comando para arrancar el servidor
+EXPOSE 8080
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
