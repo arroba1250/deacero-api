@@ -1,31 +1,39 @@
 # prepare_data.py
+# Limpia la serie diaria, rellena huecos y crea features (lags, medias móviles, calendario).
 import pandas as pd
-pd.set_option("display.max_columns", None)
-pd.set_option("display.width", None)
 
-# 1. Cargar dataset
-df = pd.read_csv("steel_rebar_prices.csv", parse_dates=["date"])
+# 1) Cargar CSV y forzar fecha como datetime
+df = pd.read_csv("steel_rebar_prices.csv")
+# fuerza conversión; si algo no parsea quedará NaT y lo filtramos
+df["date"] = pd.to_datetime(df["date"], errors="coerce")
+df = df.dropna(subset=["date"])
 
-# 2. Asegurar frecuencia diaria (rellena huecos)
-df = df.set_index("date").asfreq("D")
-df["price_usd_per_ton"] = df["price_usd_per_ton"].ffill()
+# 2) Ordenar por fecha y dejarla como índice datetime
+df = df.sort_values("date").set_index("date")
 
-# 3. Crear variables rezagadas (lags)
+# 3) Asegurar tipo numérico en precio
+df["price_usd_per_ton"] = pd.to_numeric(df["price_usd_per_ton"], errors="coerce")
+df = df.dropna(subset=["price_usd_per_ton"])
+
+# 4) Frecuencia diaria robusta (resample en lugar de asfreq)
+s = df["price_usd_per_ton"].resample("D").ffill()
+
+out = pd.DataFrame({"price_usd_per_ton": s})
+
+# 5) Lags
 for lag in [1, 7, 30]:
-    df[f"lag_{lag}"] = df["price_usd_per_ton"].shift(lag)
+    out[f"lag_{lag}"] = out["price_usd_per_ton"].shift(lag)
 
-# 4. Medias móviles
-df["rolling_mean_7"] = df["price_usd_per_ton"].rolling(7).mean()
-df["rolling_mean_30"] = df["price_usd_per_ton"].rolling(30).mean()
+# 6) Medias móviles
+out["rolling_mean_7"]  = out["price_usd_per_ton"].rolling(7).mean()
+out["rolling_mean_30"] = out["price_usd_per_ton"].rolling(30).mean()
 
-# 5. Features de calendario
-df["day_of_week"] = df.index.dayofweek
-df["month"] = df.index.month
+# 7) Calendario
+out["day_of_week"] = out.index.dayofweek
+out["month"] = out.index.month
 
-# 6. Limpiar NaN (primeras filas)
-df = df.dropna()
-
-# 7. Guardar dataset listo para modelar
-df.to_csv("steel_rebar_features.csv")
-print("Dataset enriquecido guardado en steel_rebar_features.csv")
-print(df.head())
+# 8) Quitar NaN iniciales y guardar
+out = out.dropna()
+out.to_csv("steel_rebar_features.csv")
+print("✅ Dataset enriquecido guardado en steel_rebar_features.csv")
+print(out.head())
